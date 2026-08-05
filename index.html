@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام استعلام العملاء والدفعات ونتائج القرعة</title>
+
+  <!-- Google Fonts: Cairo -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- SheetJS for Excel Reading -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <!-- Background Gradients -->
+  <div class="bg-shape shape-1"></div>
+  <div class="bg-shape shape-2"></div>
+  <div class="bg-shape shape-3"></div>
+
+  <div class="app-container">
+
+    <!-- Top Header -->
+    <header class="main-header">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <i class="fa-solid fa-building-user"></i>
+        </div>
+        <div class="logo-text">
+          <h1>منظومة الاستعلام الإلكتروني المتكاملة</h1>
+          <p>مواعيد الحضور والدفعات | نتائج القرعة العلنية وتخصيص الأراضي</p>
+        </div>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat-badge">
+          <i class="fa-solid fa-layer-group"></i>
+          <div>
+            <span class="stat-value" id="statBatchesCount">0</span>
+            <span class="stat-label">دفعة مسجلة</span>
+          </div>
+        </div>
+        <div class="stat-badge highlight">
+          <i class="fa-solid fa-users"></i>
+          <div>
+            <span class="stat-value" id="statClientsCount">0</span>
+            <span class="stat-label">عدد العملاء</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs Between Search Modules -->
+    <nav class="search-tabs-container">
+      <button class="tab-btn active" id="tabBatchesBtn" data-tab="batches">
+        <i class="fa-solid fa-users-rectangle"></i>
+        <span>استعلام مواعيد الحضور والدفعات</span>
+      </button>
+      <button class="tab-btn" id="tabLotteryBtn" data-tab="lottery">
+        <i class="fa-solid fa-award"></i>
+        <span>استعلام نتائج القرعة العلنية</span>
+        <span class="badge-new">جديد</span>
+      </button>
+    </nav>
+
+    <!-- Main Grid Content -->
+    <main class="main-content">
+
+      <!-- ================= SEARCH SECTION 1: BATCHES & ATTENDANCE ================= -->
+      <section id="sectionBatches" class="search-section search-module-tab active-tab">
+        <div class="glass-card search-card">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-magnifying-glass"></i> استعلام عن مواعيد الحضور والدفعات</h2>
+            <p>أدخل اسم العميل أو رقم الطلب للاستعلام المباشر عن الدفعة وموعد الحضور المقرر</p>
+          </div>
+
+          <form id="searchBatchForm" class="search-form" onsubmit="event.preventDefault();">
+            <div class="search-input-wrapper">
+              <i class="fa-solid fa-search search-icon"></i>
+              <input type="text" id="searchBatchInput" placeholder="أدخل رقم الطلب (مثال: ORD-10025) أو اسم العميل..."
+                autocomplete="off" autofocus>
+              <button type="button" id="clearBatchSearchBtn" class="clear-btn" title="مسح">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <button type="submit" id="searchBatchSubmitBtn" class="btn btn-primary">
+              <i class="fa-solid fa-arrow-left"></i> بحث
+            </button>
+          </form>
+
+          <div class="search-hint">
+            <span><i class="fa-solid fa-circle-info"></i> البحث مباشر باسم العميل أو رقم الطلب لمعرفة تاريخ الحضور
+              والدفعة</span>
+          </div>
+        </div>
+
+        <!-- Result Container for Batches -->
+        <div id="batchResultContainer" class="result-container">
+
+          <!-- Empty State -->
+          <div id="emptyBatchState" class="glass-card empty-state">
+            <div class="empty-icon">
+              <i class="fa-solid fa-id-card-clip"></i>
+            </div>
+            <h3>في انتظار إدخال بيانات بحث الدفعات</h3>
+            <p>قم بكتابة رقم الطلب أو اسم العميل في مربع البحث أعلاه لعرض التفاصيل فوراً.</p>
+          </div>
+
+          <!-- Not Found State -->
+          <div id="notFoundBatchState" class="glass-card not-found-state hidden">
+            <div class="not-found-icon">
+              <i class="fa-solid fa-user-slash"></i>
+            </div>
+            <h3>لم يتم العثور على العميل</h3>
+            <p id="notFoundBatchMessage">لم نجد أي عميل يطابق رقم الطلب أو الاسم المدخل في قوائم الدفعات.</p>
+          </div>
+
+          <!-- Found Result Card -->
+          <div id="clientResultCard" class="glass-card client-result-card hidden">
+            <div class="card-status-bar">
+              <span class="status-tag success">
+                <i class="fa-solid fa-circle-check"></i> تم العثور على بيانات العميل
+              </span>
+              <button id="copyDetailsBtn" class="btn btn-secondary btn-sm" title="نسخ التفاصيل">
+                <i class="fa-solid fa-copy"></i> <span id="copyBtnText">نسخ البيانات</span>
+              </button>
+            </div>
+
+            <div class="client-main-header">
+              <div class="client-avatar">
+                <i class="fa-solid fa-user-gear"></i>
+              </div>
+              <div class="client-title-info">
+                <span class="field-caption">اسم العميل</span>
+                <h2 id="cardClientName">أحمد محمد إبراهيم</h2>
+              </div>
+            </div>
+
+            <div class="details-grid">
+
+              <div class="detail-box">
+                <div class="detail-icon order-icon">
+                  <i class="fa-solid fa-hashtag"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">رقم الطلب</span>
+                  <span class="detail-value highlight-code" id="cardOrderNumber">ORD-89421</span>
+                </div>
+              </div>
+
+              <div class="detail-box">
+                <div class="detail-icon order-date-icon">
+                  <i class="fa-solid fa-calendar-day"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">تاريخ الطلب</span>
+                  <span class="detail-value order-date-value" id="cardOrderDate">غير محدد</span>
+                </div>
+              </div>
+
+              <div class="detail-box">
+                <div class="detail-icon batch-icon">
+                  <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">رقم الدفعة</span>
+                  <span class="detail-value badge-batch" id="cardBatchNumber">الدفعة 45</span>
+                </div>
+              </div>
+
+              <div class="detail-box full-width">
+                <div class="detail-icon date-icon">
+                  <i class="fa-solid fa-calendar-check"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">تاريخ الحضور المقرر</span>
+                  <span class="detail-value date-value" id="cardAttendanceDate">السبت 15 أغسطس 2026</span>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="card-footer-info">
+              <i class="fa-solid fa-users"></i>
+              <span>هذا العميل ضمن قائمة المسجلين بالدفعة (<strong id="cardBatchMiniNum">45</strong>).</span>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SEARCH SECTION 2: LOTTERY RESULTS ================= -->
+      <section id="sectionLottery" class="search-section search-module-tab hidden-tab">
+        <div class="glass-card search-card lottery-theme-card">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-file-signature"></i> استعلام نتائج القرعة العلنية والتخصيص</h2>
+            <p>أدخل اسم المتقدم أو رقم الطلب بالقرعة للاستعلام عن تفاصيل التخصيص والقطعة</p>
+          </div>
+
+          <form id="searchLotteryForm" class="search-form" onsubmit="event.preventDefault();">
+            <div class="search-input-wrapper">
+              <i class="fa-solid fa-magnifying-glass-location search-icon"></i>
+              <input type="text" id="searchLotteryInput"
+                placeholder="أدخل رقم الطلب بالقرعة (مثال: LOT-5501) أو اسم المواطن..." autocomplete="off">
+              <button type="button" id="clearLotterySearchBtn" class="clear-btn" title="مسح">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <button type="submit" id="searchLotterySubmitBtn" class="btn btn-gold">
+              <i class="fa-solid fa-trophy"></i> استعلام القرعة
+            </button>
+          </form>
+
+          <div class="search-hint">
+            <span><i class="fa-solid fa-shield-halved"></i> يتيح لك الاستعلام معرفة القطاع والمجاورة ورقم البلوك والقطعة
+              والمساحة فوراً</span>
+          </div>
+        </div>
+
+        <!-- Result Container for Lottery -->
+        <div id="lotteryResultContainer" class="result-container">
+
+          <!-- Empty State -->
+          <div id="emptyLotteryState" class="glass-card empty-state">
+            <div class="empty-icon lottery-empty-icon">
+              <i class="fa-solid fa-map-location-dot"></i>
+            </div>
+            <h3>في انتظار إدخال بيانات استعلام القرعة</h3>
+            <p>قم بكتابة رقم الطلب أو اسم المواطن بالقرعة في مربع البحث أعلاه لعرض التفاصيل فوراً.</p>
+          </div>
+
+          <!-- Not Found State -->
+          <div id="notFoundLotteryState" class="glass-card not-found-state hidden">
+            <div class="not-found-icon">
+              <i class="fa-solid fa-user-xmark"></i>
+            </div>
+            <h3>لم يتم العثور على اسم في القرعة</h3>
+            <p id="notFoundLotteryMessage">لم نجد أي نتيجة تطابق رقم الطلب أو الاسم المدخل في قائمة الفائزين بالقرعة.
+            </p>
+          </div>
+
+          <!-- Found Lottery Result Card (The 7 Fields Card) -->
+          <div id="lotteryResultCard" class="glass-card lottery-result-card hidden">
+            <div class="card-status-bar">
+              <span class="status-tag gold-tag">
+                <i class="fa-solid fa-circle-check"></i> فائز بالقرعة العلنية
+              </span>
+              <button id="copyLotteryDetailsBtn" class="btn btn-secondary btn-sm" title="نسخ بيانات التخصيص">
+                <i class="fa-solid fa-copy"></i> <span id="copyLotteryBtnText">نسخ بيانات القرعة</span>
+              </button>
+            </div>
+
+            <div class="client-main-header">
+              <div class="client-avatar lottery-avatar">
+                <i class="fa-solid fa-user-check"></i>
+              </div>
+              <div class="client-title-info">
+                <span class="field-caption">اسم المواطن / المستفيد</span>
+                <h2 id="cardLotteryName">محمود علي سليمان</h2>
+              </div>
+            </div>
+
+            <!-- The 7 Requested Fields Grid -->
+            <div class="details-grid lottery-grid">
+
+              <!-- Field 1 & 2: Name & Order Number (Header + Order Num Box) -->
+              <div class="detail-box">
+                <div class="detail-icon order-icon">
+                  <i class="fa-solid fa-receipt"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">رقم الطلب بالقرعة</span>
+                  <span class="detail-value highlight-code" id="cardLotteryOrderNum">LOT-88219</span>
+                </div>
+              </div>
+
+              <!-- Field 3: القطاع -->
+              <div class="detail-box">
+                <div class="detail-icon sector-icon">
+                  <i class="fa-solid fa-vector-square"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">القطاع</span>
+                  <span class="detail-value" id="cardLotterySector">القطاع الأول (أ)</span>
+                </div>
+              </div>
+
+              <!-- Field 4: المجاورة -->
+              <div class="detail-box">
+                <div class="detail-icon neighborhood-icon">
+                  <i class="fa-solid fa-tree-city"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">المجاورة</span>
+                  <span class="detail-value" id="cardLotteryNeighborhood">المجاورة الثالثة</span>
+                </div>
+              </div>
+
+              <!-- Field 5: رقم البلوك -->
+              <div class="detail-box">
+                <div class="detail-icon block-icon">
+                  <i class="fa-solid fa-cubes"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">رقم البلوك</span>
+                  <span class="detail-value highlight-code" id="cardLotteryBlock">B-12</span>
+                </div>
+              </div>
+
+              <!-- Field 6: رقم القطعة -->
+              <div class="detail-box">
+                <div class="detail-icon plot-icon">
+                  <i class="fa-solid fa-location-dot"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">رقم القطعة</span>
+                  <span class="detail-value highlight-code" id="cardLotteryPlot">458</span>
+                </div>
+              </div>
+
+              <!-- Field 7: المساحة -->
+              <div class="detail-box full-width area-box">
+                <div class="detail-icon area-icon">
+                  <i class="fa-solid fa-ruler-combined"></i>
+                </div>
+                <div class="detail-content">
+                  <span class="detail-label">المساحة المقررة</span>
+                  <span class="detail-value area-value" id="cardLotteryArea">209 م²</span>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="card-footer-info lottery-footer-info">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>تم اعتماد هذا التخصيص رسمياً وفقاً لنتيجة القرعة العلنية.</span>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SIDEBAR: EXCEL UPLOAD & DATA MGMT ================= -->
+      <aside class="sidebar-section">
+
+        <!-- Excel Upload Card (Admin Password Protected) -->
+        <div class="glass-card excel-upload-card" id="excelUploadCard">
+          <div class="card-header admin-card-header">
+            <div>
+              <h3><i class="fa-solid fa-file-excel"></i> إدارة ملفات البيانات</h3>
+              <p>رفع ملفات إكسيل لـ (الدفعات أو القرعة)</p>
+            </div>
+            <button id="adminToggleBtn" class="admin-badge locked" title="انقر لتسجيل الدخول كمسؤول">
+              <i class="fa-solid fa-lock" id="adminLockIcon"></i>
+              <span id="adminStatusText">مغلق للمسؤول</span>
+            </button>
+          </div>
+
+          <div class="upload-dropzone locked-dropzone" id="dropzone">
+            <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" hidden>
+            <div class="dropzone-content">
+              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+              <p id="dropzoneText">اسحب ملف Excel أو انقر لاختياره</p>
+              <span class="dropzone-hint">يدعم تلقائياً ملفات الدفعات أو ملفات القرعة الـ 7 حقول</span>
+            </div>
+          </div>
+
+          <div class="data-actions-btns">
+            <button id="clearDataBtn" class="btn btn-danger-outline btn-full">
+              <i class="fa-solid fa-trash-can"></i> مسح البيانات المخزنة
+            </button>
+          </div>
+
+          <div class="data-source-status" id="dataSourceStatus">
+            <i class="fa-solid fa-shield-halved"></i>
+            <div>
+              <strong>الحماية:</strong> <span id="sourceText">ملفات مخصصة لصاحب الموقع بكلمة سر</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Batches Browser Card -->
+        <div class="glass-card batch-browser-card" id="batchesSidebarBox">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-list-ol"></i> تصفح الدفعات</h3>
+            <p>اختر الدفعة لعرض موعدها وعملائها</p>
+          </div>
+
+          <div class="batch-select-wrapper">
+            <label for="batchSelect">اختر رقم الدفعة:</label>
+            <select id="batchSelect" class="custom-select">
+              <!-- Options injected via JS -->
+            </select>
+          </div>
+
+          <div class="batch-details-box" id="batchInfoBox">
+            <div class="batch-info-row">
+              <span>تاريخ حضور الدفعة:</span>
+              <strong id="selectedBatchDate">--</strong>
+            </div>
+            <div class="batch-info-row">
+              <span>عدد عملاء الدفعة:</span>
+              <strong id="selectedBatchCount">0 عميل</strong>
+            </div>
+          </div>
+
+          <div class="batch-clients-preview">
+            <span class="preview-title">قائمة عملاء الدفعة المحددة:</span>
+            <ul class="batch-clients-list" id="batchClientsList">
+              <!-- Items injected via JS -->
+            </ul>
+          </div>
+        </div>
+
+      </aside>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>منظومة استعلام مواعيد الحضور والدفعات ونتائج القرعة العلنية &copy; 2026 - نظام آمن ومحمي لصاحب الموقع</p>
+    </footer>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="toast hidden">
+    <i class="fa-solid fa-circle-check"></i> <span id="toastMsg">تم الإجراء بنجاح</span>
+  </div>
+
+  <!-- Admin Authentication Modal -->
+  <div id="adminAuthModal" class="modal-overlay hidden">
+    <div class="glass-card modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-user-shield"></i> التحقق من صلاحية المسؤول</h3>
+        <button type="button" id="closeAdminModalBtn" class="modal-close-btn">&times;</button>
+      </div>
+      <p class="modal-desc">رفع وتعديل بيانات الإكسيل مخصص لصاحب الموقع فقط. يرجى إدخال كلمة سر المسؤول لتأكيد صلاحياتك.
+      </p>
+
+      <form id="adminAuthForm" onsubmit="event.preventDefault();">
+        <div class="modal-input-wrapper">
+          <i class="fa-solid fa-key"></i>
+          <input type="password" id="adminPasswordInput" placeholder="أدخل كلمة سر المسؤول..." autocomplete="off">
+        </div>
+        <div id="adminAuthError" class="modal-error hidden">
+          <i class="fa-solid fa-circle-exclamation"></i> كلمة السر غير صحيحة! يرجى المحاولة مرة أخرى.
+        </div>
+        <div class="modal-actions">
+          <button type="submit" id="submitAdminAuthBtn" class="btn btn-primary btn-full">
+            <i class="fa-solid fa-unlock-keyhole"></i> تأكيد وإلغاء القفل
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
