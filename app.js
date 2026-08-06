@@ -253,9 +253,15 @@ async function loadData() {
     './data/data.xlsx',
     './data/batches.xlsx',
     './data/lottery.xlsx',
+    './data/القرعة.xlsx',
+    './data/قرعة.xlsx',
+    './data/الدفعات.xlsx',
+    './data/دفعات.xlsx',
     './data/data.csv',
     './data/batches.csv',
-    './data/lottery.csv'
+    './data/lottery.csv',
+    './data/القرعة.csv',
+    './data/قرعة.csv'
   ];
 
   for (const filePath of targetFiles) {
@@ -355,10 +361,12 @@ function loadFallbackLotteryData() {
 function loadDefaultBatchData() {
   const sampleBatches = [
     { name: 'أحمد محمد إبراهيم', orderNum: 'ORD-10025', orderDate: '10 يناير 2026', batchNum: 1, attendanceDate: 'السبت 15 أغسطس 2026' },
+    { name: 'أحمد محمد إبراهيم', orderNum: 'ORD-10040', orderDate: '25 يناير 2026', batchNum: 3, attendanceDate: 'الاثنين 17 أغسطس 2026' },
     { name: 'محمود حسن السيد', orderNum: 'ORD-10026', orderDate: '12 يناير 2026', batchNum: 1, attendanceDate: 'السبت 15 أغسطس 2026' },
     { name: 'مصطفى علي عبد الله', orderNum: 'ORD-10027', orderDate: '14 يناير 2026', batchNum: 2, attendanceDate: 'الأحد 16 أغسطس 2026' },
-    { name: 'سارة خالد محمود', orderNum: 'ORD-10028', orderDate: '15 يناير 2026', batchNum: 2, attendanceDate: 'الأحد 16 أغسطس 2026' },
-    { name: 'عبد الرحمن الشريف', orderNum: 'ORD-10029', orderDate: '18 يناير 2026', batchNum: 3, attendanceDate: 'الاثنين 17 أغسطس 2026' }
+    { name: 'أحمد محمود حسن', orderNum: 'ORD-10028', orderDate: '15 يناير 2026', batchNum: 2, attendanceDate: 'الأحد 16 أغسطس 2026' },
+    { name: 'سارة خالد محمود', orderNum: 'ORD-10029', orderDate: '16 يناير 2026', batchNum: 2, attendanceDate: 'الأحد 16 أغسطس 2026' },
+    { name: 'عبد الرحمن الشريف', orderNum: 'ORD-10030', orderDate: '18 يناير 2026', batchNum: 3, attendanceDate: 'الاثنين 17 أغسطس 2026' }
   ];
   processBatchData(sampleBatches, 'بيانات دفعات تجريبية افتراضية');
 }
@@ -373,6 +381,15 @@ function loadDefaultLotteryData() {
       blockNum: 'B-12',
       plotNum: '458',
       area: '209 م²'
+    },
+    {
+      name: 'محمود علي سليمان',
+      orderNum: 'LOT-5599',
+      sector: 'القطاع الثاني (ب)',
+      neighborhood: 'المجاورة الأولى',
+      blockNum: 'A-05',
+      plotNum: '112',
+      area: '276 م²'
     },
     {
       name: 'عمر طارق زكي',
@@ -467,7 +484,20 @@ function processLotteryData(lotteryArray, sourceLabel = 'بيانات محملة
 }
 
 /* ==========================================================================
-   Search Engine 1: Batches & Attendance
+   Helper Utilities
+   ========================================================================== */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/* ==========================================================================
+   Search Engine 1: Batches & Attendance (Multi-Result Support)
    ========================================================================== */
 function executeBatchSearch(query) {
   const trimmed = query.trim();
@@ -489,57 +519,161 @@ function executeBatchSearch(query) {
 
   const normalized = normalizeString(trimmed);
 
-  // 1. Exact order number match
-  if (batchAppData.orderMap.has(normalized)) {
-    renderBatchResult(batchAppData.orderMap.get(normalized));
+  // Filter ALL matching clients by name or order number or batch number
+  const matches = batchAppData.clients.filter(client => {
+    const normOrder = normalizeString(client.orderNum || '');
+    const normName = normalizeString(client.name || '');
+    const normBatch = normalizeString(client.batchNum || '');
+
+    return normOrder.includes(normalized) || normName.includes(normalized) || normBatch === normalized;
+  });
+
+  if (matches.length === 0) {
+    showBatchState('notFoundBatchState');
+    const notFoundMessage = document.getElementById('notFoundBatchMessage');
+    if (notFoundMessage) {
+      notFoundMessage.textContent = `لم يتم العثور على أي عميل ينطبق عليه البحث: "${trimmed}" في الدفعات`;
+    }
     return;
   }
 
-  // 2. Substring match in order numbers
-  const matchedByOrder = batchAppData.clients.find(c => normalizeString(c.orderNum).includes(normalized));
-  if (matchedByOrder) {
-    renderBatchResult(matchedByOrder);
-    return;
-  }
-
-  // 3. Substring match in client names
-  const matchedByName = batchAppData.nameList.find(item => item.normName.includes(normalized));
-  if (matchedByName) {
-    renderBatchResult(matchedByName.client);
-    return;
-  }
-
-  // 4. Not Found
-  showBatchState('notFoundBatchState');
-  const notFoundMessage = document.getElementById('notFoundBatchMessage');
-  if (notFoundMessage) {
-    notFoundMessage.textContent = `لم يتم العثور على أي عميل ينطبق عليه البحث: "${trimmed}" في الدفعات`;
-  }
+  renderBatchResults(matches, trimmed);
 }
 
-function renderBatchResult(client) {
-  document.getElementById('cardClientName').textContent = client.name;
-  document.getElementById('cardOrderNumber').textContent = client.orderNum;
-  document.getElementById('cardOrderDate').textContent = client.orderDate || 'غير محدد';
-  document.getElementById('cardBatchNumber').textContent = `الدفعة ${client.batchNum}`;
-  document.getElementById('cardAttendanceDate').textContent = client.attendanceDate;
-  document.getElementById('cardBatchMiniNum').textContent = client.batchNum;
+function renderBatchResults(matches, query) {
+  const wrapper = document.getElementById('batchResultsWrapper');
+  if (!wrapper) return;
 
-  const copyBtnText = document.getElementById('copyBtnText');
-  if (copyBtnText) copyBtnText.textContent = 'نسخ البيانات';
+  const countText = matches.length === 1 ? 'نتيجة واحدة' : `${matches.length.toLocaleString('ar-EG')} نتائج`;
 
-  const card = document.getElementById('clientResultCard');
-  if (card) {
-    card.classList.remove('card-animate-pop');
-    void card.offsetWidth;
-    card.classList.add('card-animate-pop');
+  let html = `
+    <div class="results-summary-bar">
+      <div class="summary-badge">
+        <i class="fa-solid fa-users-viewfinder"></i>
+        <span>تم العثور على <strong>${countText}</strong> تطابق: "${escapeHtml(query)}"</span>
+      </div>
+      ${matches.length > 1 ? `
+        <button id="copyAllBatchesBtn" class="btn btn-secondary btn-sm">
+          <i class="fa-solid fa-copy"></i> <span>نسخ جميع النتائج (${matches.length})</span>
+        </button>
+      ` : ''}
+    </div>
+    <div class="results-cards-list">
+  `;
+
+  matches.forEach((client, index) => {
+    html += `
+      <div class="glass-card client-result-card card-animate-pop">
+        <div class="card-status-bar">
+          <span class="status-tag success">
+            <i class="fa-solid fa-circle-check"></i> ${matches.length > 1 ? `نتيجة رقم #${index + 1}` : 'تم العثور على بيانات العميل'}
+          </span>
+          <button class="btn btn-secondary btn-sm copy-single-batch-btn" data-index="${index}">
+            <i class="fa-solid fa-copy"></i> <span>نسخ البيانات</span>
+          </button>
+        </div>
+
+        <div class="client-main-header">
+          <div class="client-avatar">
+            <i class="fa-solid fa-user-gear"></i>
+          </div>
+          <div class="client-title-info">
+            <span class="field-caption">اسم العميل</span>
+            <h2>${escapeHtml(client.name)}</h2>
+          </div>
+        </div>
+
+        <div class="details-grid">
+          <div class="detail-box">
+            <div class="detail-icon order-icon">
+              <i class="fa-solid fa-hashtag"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">رقم الطلب</span>
+              <span class="detail-value highlight-code">${escapeHtml(client.orderNum)}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon order-date-icon">
+              <i class="fa-solid fa-calendar-day"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">تاريخ الطلب</span>
+              <span class="detail-value order-date-value">${escapeHtml(client.orderDate || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon batch-icon">
+              <i class="fa-solid fa-boxes-stacked"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">رقم الدفعة</span>
+              <span class="detail-value badge-batch">الدفعة ${escapeHtml(client.batchNum)}</span>
+            </div>
+          </div>
+
+          <div class="detail-box full-width">
+            <div class="detail-icon date-icon">
+              <i class="fa-solid fa-calendar-check"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">تاريخ الحضور المقرر</span>
+              <span class="detail-value date-value">${escapeHtml(client.attendanceDate || 'غير محدد')}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer-info">
+          <i class="fa-solid fa-users"></i>
+          <span>هذا العميل ضمن قائمة المسجلين بالدفعة (<strong>${escapeHtml(client.batchNum)}</strong>).</span>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  wrapper.innerHTML = html;
+
+  // Bind copy handlers for batch matches
+  const copyAllBtn = wrapper.querySelector('#copyAllBatchesBtn');
+  if (copyAllBtn) {
+    copyAllBtn.addEventListener('click', () => {
+      const summaryText = matches.map((c, i) =>
+        `النتيجة #${i + 1}:\n- الاسم: ${c.name}\n- رقم الطلب: ${c.orderNum}\n- تاريخ الطلب: ${c.orderDate || 'غير محدد'}\n- الدفعة: الدفعة ${c.batchNum}\n- تاريخ الحضور المقرر: ${c.attendanceDate || 'غير محدد'}`
+      ).join('\n-------------------------\n');
+
+      navigator.clipboard.writeText(summaryText).then(() => {
+        showToast('تم نسخ كافة النتائج بنجاح');
+      });
+    });
   }
 
-  showBatchState('clientResultCard');
+  wrapper.querySelectorAll('.copy-single-batch-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.getAttribute('data-index'));
+      const c = matches[idx];
+      if (!c) return;
+
+      const summaryText = `تفاصيل الدفعة وموعد الحضور:\n- الاسم: ${c.name}\n- رقم الطلب: ${c.orderNum}\n- تاريخ الطلب: ${c.orderDate || 'غير محدد'}\n- الدفعة: الدفعة ${c.batchNum}\n- تاريخ الحضور المقرر: ${c.attendanceDate || 'غير محدد'}`;
+
+      navigator.clipboard.writeText(summaryText).then(() => {
+        const span = btn.querySelector('span');
+        if (span) span.textContent = 'تم النسخ!';
+        showToast(`تم نسخ تفاصيل العميل (${c.name}) بنجاح`);
+        setTimeout(() => {
+          if (span) span.textContent = 'نسخ البيانات';
+        }, 3000);
+      });
+    });
+  });
+
+  showBatchState('batchResultsWrapper');
 }
 
 function showBatchState(stateId) {
-  const states = ['emptyBatchState', 'notFoundBatchState', 'clientResultCard'];
+  const states = ['emptyBatchState', 'notFoundBatchState', 'clientResultCard', 'batchResultsWrapper'];
   states.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -553,7 +687,7 @@ function showBatchState(stateId) {
 }
 
 /* ==========================================================================
-   Search Engine 2: Housing Lottery Results (The 7 Fields)
+   Search Engine 2: Housing Lottery Results (Multi-Result Support)
    ========================================================================== */
 function executeLotterySearch(query) {
   const trimmed = query.trim();
@@ -575,59 +709,182 @@ function executeLotterySearch(query) {
 
   const normalized = normalizeString(trimmed);
 
-  // 1. Exact order number match
-  if (lotteryAppData.orderMap.has(normalized)) {
-    renderLotteryResult(lotteryAppData.orderMap.get(normalized));
+  // Filter ALL matching participants in lottery
+  const matches = lotteryAppData.participants.filter(item => {
+    const normOrder = normalizeString(item.orderNum || '');
+    const normName = normalizeString(item.name || '');
+    const normSector = normalizeString(item.sector || '');
+    const normPlot = normalizeString(item.plotNum || '');
+    const normBlock = normalizeString(item.blockNum || '');
+
+    return normOrder.includes(normalized) || 
+           normName.includes(normalized) || 
+           normSector.includes(normalized) || 
+           normPlot.includes(normalized) || 
+           normBlock.includes(normalized);
+  });
+
+  if (matches.length === 0) {
+    showLotteryState('notFoundLotteryState');
+    const notFoundMessage = document.getElementById('notFoundLotteryMessage');
+    if (notFoundMessage) {
+      notFoundMessage.textContent = `لم نجد أي نتيجة تطابق البحث: "${trimmed}" في سجلات القرعة العلنية`;
+    }
     return;
   }
 
-  // 2. Substring match in order numbers
-  const matchedByOrder = lotteryAppData.participants.find(p => normalizeString(p.orderNum).includes(normalized));
-  if (matchedByOrder) {
-    renderLotteryResult(matchedByOrder);
-    return;
-  }
-
-  // 3. Substring match in names
-  const matchedByName = lotteryAppData.nameList.find(item => item.normName.includes(normalized));
-  if (matchedByName) {
-    renderLotteryResult(matchedByName.item);
-    return;
-  }
-
-  // 4. Not Found
-  showLotteryState('notFoundLotteryState');
-  const notFoundMessage = document.getElementById('notFoundLotteryMessage');
-  if (notFoundMessage) {
-    notFoundMessage.textContent = `لم نجد أي نتيجة تطابق البحث: "${trimmed}" في سجلات القرعة العلنية`;
-  }
+  renderLotteryResults(matches, trimmed);
 }
 
-function renderLotteryResult(item) {
-  // Populate the 7 Fields requested by User
-  document.getElementById('cardLotteryName').textContent = item.name || 'غير محدد';
-  document.getElementById('cardLotteryOrderNum').textContent = item.orderNum || 'غير محدد';
-  document.getElementById('cardLotterySector').textContent = item.sector || 'غير محدد';
-  document.getElementById('cardLotteryNeighborhood').textContent = item.neighborhood || 'غير محدد';
-  document.getElementById('cardLotteryBlock').textContent = item.blockNum || 'غير محدد';
-  document.getElementById('cardLotteryPlot').textContent = item.plotNum || 'غير محدد';
-  document.getElementById('cardLotteryArea').textContent = item.area || 'غير محدد';
+function renderLotteryResults(matches, query) {
+  const wrapper = document.getElementById('lotteryResultsWrapper');
+  if (!wrapper) return;
 
-  const copyLotteryBtnText = document.getElementById('copyLotteryBtnText');
-  if (copyLotteryBtnText) copyLotteryBtnText.textContent = 'نسخ بيانات القرعة';
+  const countText = matches.length === 1 ? 'نتيجة واحدة' : `${matches.length.toLocaleString('ar-EG')} نتائج`;
 
-  const card = document.getElementById('lotteryResultCard');
-  if (card) {
-    card.classList.remove('card-animate-pop');
-    void card.offsetWidth;
-    card.classList.add('card-animate-pop');
+  let html = `
+    <div class="results-summary-bar">
+      <div class="summary-badge gold-summary">
+        <i class="fa-solid fa-trophy"></i>
+        <span>تم العثور على <strong>${countText}</strong> في القرعة تطابق: "${escapeHtml(query)}"</span>
+      </div>
+      ${matches.length > 1 ? `
+        <button id="copyAllLotteryBtn" class="btn btn-secondary btn-sm">
+          <i class="fa-solid fa-copy"></i> <span>نسخ جميع النتائج (${matches.length})</span>
+        </button>
+      ` : ''}
+    </div>
+    <div class="results-cards-list">
+  `;
+
+  matches.forEach((item, index) => {
+    html += `
+      <div class="glass-card lottery-result-card card-animate-pop">
+        <div class="card-status-bar">
+          <span class="status-tag gold-tag">
+            <i class="fa-solid fa-circle-check"></i> ${matches.length > 1 ? `نتيجة رقم #${index + 1} بالقرعة` : 'فائز بالقرعة العلنية'}
+          </span>
+          <button class="btn btn-secondary btn-sm copy-single-lottery-btn" data-index="${index}">
+            <i class="fa-solid fa-copy"></i> <span>نسخ بيانات القرعة</span>
+          </button>
+        </div>
+
+        <div class="client-main-header">
+          <div class="client-avatar lottery-avatar">
+            <i class="fa-solid fa-user-check"></i>
+          </div>
+          <div class="client-title-info">
+            <span class="field-caption">اسم المواطن / المستفيد</span>
+            <h2>${escapeHtml(item.name || 'غير محدد')}</h2>
+          </div>
+        </div>
+
+        <div class="details-grid lottery-grid">
+          <div class="detail-box">
+            <div class="detail-icon order-icon">
+              <i class="fa-solid fa-receipt"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">رقم الطلب بالقرعة</span>
+              <span class="detail-value highlight-code">${escapeHtml(item.orderNum || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon sector-icon">
+              <i class="fa-solid fa-vector-square"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">القطاع</span>
+              <span class="detail-value">${escapeHtml(item.sector || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon neighborhood-icon">
+              <i class="fa-solid fa-tree-city"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">المجاورة</span>
+              <span class="detail-value">${escapeHtml(item.neighborhood || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon block-icon">
+              <i class="fa-solid fa-cubes"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">رقم البلوك</span>
+              <span class="detail-value highlight-code">${escapeHtml(item.blockNum || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon plot-icon">
+              <i class="fa-solid fa-location-dot"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">رقم القطعة</span>
+              <span class="detail-value highlight-code">${escapeHtml(item.plotNum || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon area-icon">
+              <i class="fa-solid fa-ruler-combined"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">المساحة</span>
+              <span class="detail-value">${escapeHtml(item.area || 'غير محدد')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  wrapper.innerHTML = html;
+
+  // Bind copy handlers for lottery matches
+  const copyAllBtn = wrapper.querySelector('#copyAllLotteryBtn');
+  if (copyAllBtn) {
+    copyAllBtn.addEventListener('click', () => {
+      const summaryText = matches.map((item, i) =>
+        `نتيجة القرعة #${i + 1}:\n- الاسم: ${item.name || 'غير محدد'}\n- رقم الطلب: ${item.orderNum || 'غير محدد'}\n- القطاع: ${item.sector || 'غير محدد'}\n- المجاورة: ${item.neighborhood || 'غير محدد'}\n- رقم البلوك: ${item.blockNum || 'غير محدد'}\n- رقم القطعة: ${item.plotNum || 'غير محدد'}\n- المساحة: ${item.area || 'غير محدد'}`
+      ).join('\n-------------------------\n');
+
+      navigator.clipboard.writeText(summaryText).then(() => {
+        showToast('تم نسخ جميع نتائج القرعة بنجاح');
+      });
+    });
   }
 
-  showLotteryState('lotteryResultCard');
+  wrapper.querySelectorAll('.copy-single-lottery-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.getAttribute('data-index'));
+      const item = matches[idx];
+      if (!item) return;
+
+      const summaryText = `تفاصيل نتيجة القرعة العلنية:\n- الاسم: ${item.name || 'غير محدد'}\n- رقم الطلب: ${item.orderNum || 'غير محدد'}\n- القطاع: ${item.sector || 'غير محدد'}\n- المجاورة: ${item.neighborhood || 'غير محدد'}\n- رقم البلوك: ${item.blockNum || 'غير محدد'}\n- رقم القطعة: ${item.plotNum || 'غير محدد'}\n- المساحة: ${item.area || 'غير محدد'}`;
+
+      navigator.clipboard.writeText(summaryText).then(() => {
+        const span = btn.querySelector('span');
+        if (span) span.textContent = 'تم النسخ!';
+        showToast(`تم نسخ تفاصيل القرعة للمواطن (${item.name}) بنجاح`);
+        setTimeout(() => {
+          if (span) span.textContent = 'نسخ بيانات القرعة';
+        }, 3000);
+      });
+    });
+  });
+
+  showLotteryState('lotteryResultsWrapper');
 }
 
 function showLotteryState(stateId) {
-  const states = ['emptyLotteryState', 'notFoundLotteryState', 'lotteryResultCard'];
+  const states = ['emptyLotteryState', 'notFoundLotteryState', 'lotteryResultCard', 'lotteryResultsWrapper'];
   states.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
