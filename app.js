@@ -244,42 +244,112 @@ function logoutAdmin() {
 /* ==========================================================================
    Data Loading & Default Mock Data Logic
    ========================================================================== */
-function loadData() {
-  // 1. Load Batches Data
+async function loadData() {
+  let loadedFromDataFolder = false;
+  let accumulatedBatches = [];
+  let accumulatedLottery = [];
+
+  const targetFiles = [
+    './data/data.xlsx',
+    './data/batches.xlsx',
+    './data/lottery.xlsx',
+    './data/data.csv',
+    './data/batches.csv',
+    './data/lottery.csv'
+  ];
+
+  for (const filePath of targetFiles) {
+    const workbook = await tryFetchAndParseExcel(filePath);
+    if (workbook && workbook.SheetNames && workbook.SheetNames.length > 0) {
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        if (jsonData && jsonData.length >= 2) {
+          const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
+          const isLottery = headers.some(h =>
+            h.includes('قطاع') || h.includes('مجاوره') || h.includes('مجاورة') ||
+            h.includes('بلوك') || h.includes('قطعه') || h.includes('قطعة') || h.includes('مساحه') || h.includes('مساحة')
+          );
+          if (isLottery) {
+            const items = extractLotteryItemsFromRows(jsonData);
+            accumulatedLottery.push(...items);
+          } else {
+            const items = extractBatchItemsFromRows(jsonData);
+            accumulatedBatches.push(...items);
+          }
+          loadedFromDataFolder = true;
+        }
+      }
+    }
+  }
+
+  if (loadedFromDataFolder) {
+    if (accumulatedBatches.length > 0) {
+      processBatchData(accumulatedBatches, 'بيانات المجلد data/');
+      try { localStorage.setItem(STORAGE_KEY_BATCH, JSON.stringify(accumulatedBatches)); } catch (e) {}
+    } else {
+      loadFallbackBatchData();
+    }
+
+    if (accumulatedLottery.length > 0) {
+      processLotteryData(accumulatedLottery, 'بيانات المجلد data/');
+      try { localStorage.setItem(STORAGE_KEY_LOTTERY, JSON.stringify(accumulatedLottery)); } catch (e) {}
+    } else {
+      loadFallbackLotteryData();
+    }
+
+    showToast('تم تحميل البيانات تلقائياً من مجلد (data/)');
+    return;
+  }
+
+  // Fallbacks if data/ folder has no loaded files
+  loadFallbackBatchData();
+  loadFallbackLotteryData();
+}
+
+async function tryFetchAndParseExcel(filePath) {
+  try {
+    const res = await fetch(filePath, { cache: 'no-cache' });
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) return null;
+    if (typeof XLSX === 'undefined') return null;
+    return XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: true });
+  } catch (err) {
+    return null;
+  }
+}
+
+function loadFallbackBatchData() {
   const savedBatchData = localStorage.getItem(STORAGE_KEY_BATCH);
   if (savedBatchData) {
     try {
       const parsed = JSON.parse(savedBatchData);
       if (Array.isArray(parsed) && parsed.length > 0) {
         processBatchData(parsed, 'بيانات الدفعات المحملة سابقاً');
-      } else {
-        loadDefaultBatchData();
+        return;
       }
     } catch (e) {
       console.error('Error parsing stored batch data:', e);
-      loadDefaultBatchData();
     }
-  } else {
-    loadDefaultBatchData();
   }
+  loadDefaultBatchData();
+}
 
-  // 2. Load Lottery Data
+function loadFallbackLotteryData() {
   const savedLotteryData = localStorage.getItem(STORAGE_KEY_LOTTERY);
   if (savedLotteryData) {
     try {
       const parsed = JSON.parse(savedLotteryData);
       if (Array.isArray(parsed) && parsed.length > 0) {
         processLotteryData(parsed, 'بيانات القرعة المحملة سابقاً');
-      } else {
-        loadDefaultLotteryData();
+        return;
       }
     } catch (e) {
       console.error('Error parsing stored lottery data:', e);
-      loadDefaultLotteryData();
     }
-  } else {
-    loadDefaultLotteryData();
   }
+  loadDefaultLotteryData();
 }
 
 function loadDefaultBatchData() {
@@ -833,7 +903,10 @@ function parseAndImportExcelRows(rows, fileName) {
   }
 }
 
-function parseLotteryRows(rows, headers, fileName) {
+function extractLotteryItemsFromRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const headers = rows[0].map(h => String(h || '').trim().toLowerCase());
+
   let nameCol = headers.findIndex(h => h.includes('اسم') || h.includes('name') || h.includes('مواطن') || h.includes('عميل'));
   let orderCol = headers.findIndex(h => h.includes('طلب') || h.includes('كود') || h.includes('code') || h.includes('order') || h.includes('رقم'));
   let sectorCol = headers.findIndex(h => h.includes('قطاع') || h.includes('sector'));
@@ -842,7 +915,6 @@ function parseLotteryRows(rows, headers, fileName) {
   let plotCol = headers.findIndex(h => h.includes('قطعه') || h.includes('قطعة') || h.includes('plot'));
   let areaCol = headers.findIndex(h => h.includes('مساحه') || h.includes('مساحة') || h.includes('area'));
 
-  // Fallbacks
   if (nameCol === -1) nameCol = 0;
   if (orderCol === -1) orderCol = 1;
   if (sectorCol === -1) sectorCol = 2;
@@ -879,6 +951,12 @@ function parseLotteryRows(rows, headers, fileName) {
     });
   }
 
+  return importedLottery;
+}
+
+function parseLotteryRows(rows, headers, fileName) {
+  const importedLottery = extractLotteryItemsFromRows(rows);
+
   if (importedLottery.length > 0) {
     try {
       localStorage.setItem(STORAGE_KEY_LOTTERY, JSON.stringify(importedLottery));
@@ -888,7 +966,6 @@ function parseLotteryRows(rows, headers, fileName) {
     processLotteryData(importedLottery, `ملف قرعة: ${fileName}`);
     showToast(`تم استيراد ${importedLottery.length.toLocaleString('ar-EG')} نتيجة قرعة بنجاح`);
 
-    // Auto-switch tab to lottery to show user
     const tabLotteryBtn = document.getElementById('tabLotteryBtn');
     if (tabLotteryBtn) tabLotteryBtn.click();
 
@@ -897,7 +974,10 @@ function parseLotteryRows(rows, headers, fileName) {
   }
 }
 
-function parseBatchRows(rows, headers, fileName) {
+function extractBatchItemsFromRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const headers = rows[0].map(h => String(h || '').trim().toLowerCase());
+
   let nameCol = headers.findIndex(h => h.includes('اسم') || h.includes('name') || h.includes('عميل'));
   let batchCol = headers.findIndex(h => h.includes('دفعه') || h.includes('دفعة') || h.includes('batch'));
   let orderCol = headers.findIndex(h => h.includes('طلب') || h.includes('كود') || h.includes('code') || h.includes('order'));
@@ -932,6 +1012,12 @@ function parseBatchRows(rows, headers, fileName) {
       attendanceDate: attendanceDate
     });
   }
+
+  return importedClients;
+}
+
+function parseBatchRows(rows, headers, fileName) {
+  const importedClients = extractBatchItemsFromRows(rows);
 
   if (importedClients.length > 0) {
     try {
