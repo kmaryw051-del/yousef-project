@@ -320,7 +320,7 @@ async function tryFetchAndParseExcel(filePath) {
     const arrayBuffer = await res.arrayBuffer();
     if (!arrayBuffer || arrayBuffer.byteLength === 0) return null;
     if (typeof XLSX === 'undefined') return null;
-    return XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: true });
+    return XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false });
   } catch (err) {
     return null;
   }
@@ -518,14 +518,25 @@ function executeBatchSearch(query) {
   }
 
   const normalized = normalizeString(trimmed);
+  const queryDigits = normalized.replace(/\D/g, '');
 
-  // Filter ALL matching clients by name or order number or batch number
+  // Filter matching clients accurately
   const matches = batchAppData.clients.filter(client => {
     const normOrder = normalizeString(client.orderNum || '');
     const normName = normalizeString(client.name || '');
-    const normBatch = normalizeString(client.batchNum || '');
 
-    return normOrder.includes(normalized) || normName.includes(normalized) || normBatch === normalized;
+    if (queryDigits.length > 0) {
+      // Searching by number (order number, ID, or phone number)
+      const orderDigits = normOrder.replace(/\D/g, '');
+      const nameDigits = normName.replace(/\D/g, '');
+
+      return normOrder.includes(normalized) ||
+             (orderDigits.length > 0 && orderDigits.includes(queryDigits)) ||
+             (nameDigits.length > 0 && nameDigits.includes(queryDigits));
+    } else {
+      // Pure text search (name or order code)
+      return normName.includes(normalized) || normOrder.includes(normalized);
+    }
   });
 
   if (matches.length === 0) {
@@ -708,20 +719,41 @@ function executeLotterySearch(query) {
   }
 
   const normalized = normalizeString(trimmed);
+  const queryDigits = normalized.replace(/\D/g, '');
 
-  // Filter ALL matching participants in lottery
+  // Filter matching participants in lottery accurately
   const matches = lotteryAppData.participants.filter(item => {
     const normOrder = normalizeString(item.orderNum || '');
     const normName = normalizeString(item.name || '');
-    const normSector = normalizeString(item.sector || '');
     const normPlot = normalizeString(item.plotNum || '');
     const normBlock = normalizeString(item.blockNum || '');
 
-    return normOrder.includes(normalized) || 
-           normName.includes(normalized) || 
-           normSector.includes(normalized) || 
-           normPlot.includes(normalized) || 
-           normBlock.includes(normalized);
+    if (queryDigits.length > 0) {
+      // Numeric search (order number, plot number, block number)
+      const orderDigits = normOrder.replace(/\D/g, '');
+      const nameDigits = normName.replace(/\D/g, '');
+      const plotDigits = normPlot.replace(/\D/g, '');
+      const blockDigits = normBlock.replace(/\D/g, '');
+
+      return normOrder.includes(normalized) ||
+             normPlot.includes(normalized) ||
+             normBlock.includes(normalized) ||
+             (orderDigits.length > 0 && orderDigits.includes(queryDigits)) ||
+             (nameDigits.length > 0 && nameDigits.includes(queryDigits)) ||
+             (plotDigits.length > 0 && plotDigits.includes(queryDigits)) ||
+             (blockDigits.length > 0 && blockDigits.includes(queryDigits));
+    } else {
+      // Text search
+      const normSector = normalizeString(item.sector || '');
+      const normNeighborhood = normalizeString(item.neighborhood || '');
+
+      return normName.includes(normalized) || 
+             normOrder.includes(normalized) || 
+             normSector.includes(normalized) || 
+             normNeighborhood.includes(normalized) ||
+             normPlot.includes(normalized) || 
+             normBlock.includes(normalized);
+    }
   });
 
   if (matches.length === 0) {
@@ -1124,7 +1156,7 @@ function handleExcelFile(file) {
   reader.onload = (e) => {
     try {
       const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+      const workbook = XLSX.read(data, { type: 'array', cellDates: false });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
@@ -1293,16 +1325,34 @@ function parseBatchRows(rows, headers, fileName) {
 }
 
 function formatDateValue(rawVal) {
-  if (!rawVal) return 'غير محدد';
+  if (rawVal === null || rawVal === undefined || rawVal === '') return 'غير محدد';
+
   if (rawVal instanceof Date) {
-    return rawVal.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const y = rawVal.getUTCFullYear();
+    const m = rawVal.getUTCMonth();
+    const d = rawVal.getUTCDate();
+    const utcDate = new Date(Date.UTC(y, m, d));
+    return utcDate.toLocaleDateString('ar-EG', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
   }
+
   if (typeof rawVal === 'number' && rawVal > 20000 && rawVal < 60000) {
     const jsDate = new Date(Math.round((rawVal - 25569) * 86400 * 1000));
-    return jsDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    return jsDate.toLocaleDateString('ar-EG', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
   }
+
   const str = String(rawVal).trim();
-  return str || 'غير محدد';
+  if (!str) return 'غير محدد';
+
+  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10) - 1;
+    const d = parseInt(isoMatch[3], 10);
+    const utcDate = new Date(Date.UTC(y, m, d));
+    return utcDate.toLocaleDateString('ar-EG', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  return str;
 }
 
 /* ==========================================================================
