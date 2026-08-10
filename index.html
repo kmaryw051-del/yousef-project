@@ -1,4 +1,4 @@
-36<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 
 <head>
@@ -359,41 +359,7 @@
       <!-- ================= SIDEBAR: EXCEL UPLOAD & DATA MGMT ================= -->
       <aside class="sidebar-section">
 
-        <!-- Excel Upload Card (Admin Password Protected) -->
-        <div class="glass-card excel-upload-card" id="excelUploadCard">
-          <div class="card-header admin-card-header">
-            <div>
-              <h3><i class="fa-solid fa-file-excel"></i> إدارة ملفات البيانات</h3>
-              <p>رفع ملفات إكسيل لـ (الدفعات أو القرعة)</p>
-            </div>
-            <button id="adminToggleBtn" class="admin-badge locked" title="انقر لتسجيل الدخول كمسؤول">
-              <i class="fa-solid fa-lock" id="adminLockIcon"></i>
-              <span id="adminStatusText">مغلق للمسؤول</span>
-            </button>
-          </div>
 
-          <div class="upload-dropzone locked-dropzone" id="dropzone">
-            <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" hidden>
-            <div class="dropzone-content">
-              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
-              <p id="dropzoneText">اسحب ملف Excel أو انقر لاختياره</p>
-              <span class="dropzone-hint">يدعم تلقائياً ملفات الدفعات أو ملفات القرعة الـ 7 حقول</span>
-            </div>
-          </div>
-
-          <div class="data-actions-btns">
-            <button id="clearDataBtn" class="btn btn-danger-outline btn-full">
-              <i class="fa-solid fa-trash-can"></i> مسح البيانات المخزنة
-            </button>
-          </div>
-
-          <div class="data-source-status" id="dataSourceStatus">
-            <i class="fa-solid fa-shield-halved"></i>
-            <div>
-              <strong>الحماية:</strong> <span id="sourceText">ملفات مخصصة لصاحب الموقع بكلمة سر</span>
-            </div>
-          </div>
-        </div>
 
         <!-- Batches Browser Card -->
         <div class="glass-card batch-browser-card" id="batchesSidebarBox">
@@ -444,32 +410,7 @@
     <i class="fa-solid fa-circle-check"></i> <span id="toastMsg">تم الإجراء بنجاح</span>
   </div>
 
-  <!-- Admin Authentication Modal -->
-  <div id="adminAuthModal" class="modal-overlay hidden">
-    <div class="glass-card modal-card">
-      <div class="modal-header">
-        <h3><i class="fa-solid fa-user-shield"></i> التحقق من صلاحية المسؤول</h3>
-        <button type="button" id="closeAdminModalBtn" class="modal-close-btn">&times;</button>
-      </div>
-      <p class="modal-desc">رفع وتعديل بيانات الإكسيل مخصص لصاحب الموقع فقط. يرجى إدخال كلمة سر المسؤول لتأكيد صلاحياتك.
-      </p>
 
-      <form id="adminAuthForm" onsubmit="event.preventDefault();">
-        <div class="modal-input-wrapper">
-          <i class="fa-solid fa-key"></i>
-          <input type="password" id="adminPasswordInput" placeholder="أدخل كلمة سر المسؤول..." autocomplete="off">
-        </div>
-        <div id="adminAuthError" class="modal-error hidden">
-          <i class="fa-solid fa-circle-exclamation"></i> كلمة السر غير صحيحة! يرجى المحاولة مرة أخرى.
-        </div>
-        <div class="modal-actions">
-          <button type="submit" id="submitAdminAuthBtn" class="btn btn-primary btn-full">
-            <i class="fa-solid fa-unlock-keyhole"></i> تأكيد وإلغاء القفل
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <script src="app.js"></script>
 </body>
