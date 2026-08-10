@@ -304,7 +304,7 @@ async function loadData() {
       loadFallbackLotteryData();
     }
 
-    showToast('تم تحميل البيانات تلقائياً من مجلد (data/)');
+    // Toast notification after data loading removed per user request
     return;
   }
 
@@ -520,24 +520,35 @@ function executeBatchSearch(query) {
   const normalized = normalizeString(trimmed);
   const queryDigits = normalized.replace(/\D/g, '');
 
-  // Filter matching clients accurately
-  const matches = batchAppData.clients.filter(client => {
+  // 1. Check for EXACT order number matches first (no partial digit suggestions)
+  const exactOrderMatches = batchAppData.clients.filter(client => {
     const normOrder = normalizeString(client.orderNum || '');
-    const normName = normalizeString(client.name || '');
+    if (!normOrder) return false;
+    const orderDigits = normOrder.replace(/\D/g, '');
 
-    if (queryDigits.length > 0) {
-      // Searching by number (order number, ID, or phone number)
-      const orderDigits = normOrder.replace(/\D/g, '');
-      const nameDigits = normName.replace(/\D/g, '');
-
-      return normOrder.includes(normalized) ||
-             (orderDigits.length > 0 && orderDigits.includes(queryDigits)) ||
-             (nameDigits.length > 0 && nameDigits.includes(queryDigits));
-    } else {
-      // Pure text search (name or order code)
-      return normName.includes(normalized) || normOrder.includes(normalized);
-    }
+    if (normOrder === normalized) return true;
+    if (queryDigits.length > 0 && orderDigits.length > 0 && orderDigits === queryDigits) return true;
+    return false;
   });
+
+  let matches = [];
+
+  if (exactOrderMatches.length > 0) {
+    matches = exactOrderMatches;
+  } else {
+    // If no exact order match, perform search by client name
+    matches = batchAppData.clients.filter(client => {
+      const normName = normalizeString(client.name || '');
+
+      if (queryDigits.length > 0) {
+        const nameDigits = normName.replace(/\D/g, '');
+        return normName.includes(normalized) ||
+               (nameDigits.length > 0 && nameDigits.includes(queryDigits));
+      } else {
+        return normName.includes(normalized);
+      }
+    });
+  }
 
   if (matches.length === 0) {
     showBatchState('notFoundBatchState');
@@ -721,40 +732,50 @@ function executeLotterySearch(query) {
   const normalized = normalizeString(trimmed);
   const queryDigits = normalized.replace(/\D/g, '');
 
-  // Filter matching participants in lottery accurately
-  const matches = lotteryAppData.participants.filter(item => {
+  // 1. Check for EXACT order number matches first in lottery (no partial suggestions)
+  const exactOrderMatches = lotteryAppData.participants.filter(item => {
     const normOrder = normalizeString(item.orderNum || '');
-    const normName = normalizeString(item.name || '');
-    const normPlot = normalizeString(item.plotNum || '');
-    const normBlock = normalizeString(item.blockNum || '');
+    if (!normOrder) return false;
+    const orderDigits = normOrder.replace(/\D/g, '');
 
-    if (queryDigits.length > 0) {
-      // Numeric search (order number, plot number, block number)
-      const orderDigits = normOrder.replace(/\D/g, '');
-      const nameDigits = normName.replace(/\D/g, '');
-      const plotDigits = normPlot.replace(/\D/g, '');
-      const blockDigits = normBlock.replace(/\D/g, '');
+    if (normOrder === normalized) return true;
+    if (queryDigits.length > 0 && orderDigits.length > 0 && orderDigits === queryDigits) return true;
+    return false;
+  });
 
-      return normOrder.includes(normalized) ||
-             normPlot.includes(normalized) ||
-             normBlock.includes(normalized) ||
-             (orderDigits.length > 0 && orderDigits.includes(queryDigits)) ||
-             (nameDigits.length > 0 && nameDigits.includes(queryDigits)) ||
-             (plotDigits.length > 0 && plotDigits.includes(queryDigits)) ||
-             (blockDigits.length > 0 && blockDigits.includes(queryDigits));
-    } else {
-      // Text search
+  let matches = [];
+
+  if (exactOrderMatches.length > 0) {
+    matches = exactOrderMatches;
+  } else {
+    // If no exact order match, search by name, plot, block, sector, neighborhood
+    matches = lotteryAppData.participants.filter(item => {
+      const normName = normalizeString(item.name || '');
+      const normPlot = normalizeString(item.plotNum || '');
+      const normBlock = normalizeString(item.blockNum || '');
       const normSector = normalizeString(item.sector || '');
       const normNeighborhood = normalizeString(item.neighborhood || '');
 
-      return normName.includes(normalized) || 
-             normOrder.includes(normalized) || 
-             normSector.includes(normalized) || 
-             normNeighborhood.includes(normalized) ||
-             normPlot.includes(normalized) || 
-             normBlock.includes(normalized);
-    }
-  });
+      if (queryDigits.length > 0) {
+        const plotDigits = normPlot.replace(/\D/g, '');
+        const blockDigits = normBlock.replace(/\D/g, '');
+        const nameDigits = normName.replace(/\D/g, '');
+
+        return normPlot === normalized ||
+               normBlock === normalized ||
+               (plotDigits.length > 0 && plotDigits === queryDigits) ||
+               (blockDigits.length > 0 && blockDigits === queryDigits) ||
+               normName.includes(normalized) ||
+               (nameDigits.length > 0 && nameDigits.includes(queryDigits));
+      } else {
+        return normName.includes(normalized) || 
+               normSector.includes(normalized) || 
+               normNeighborhood.includes(normalized) ||
+               normPlot.includes(normalized) || 
+               normBlock.includes(normalized);
+      }
+    });
+  }
 
   if (matches.length === 0) {
     showLotteryState('notFoundLotteryState');
