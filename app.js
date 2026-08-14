@@ -250,18 +250,25 @@ async function loadData() {
   let accumulatedLottery = [];
 
   const targetFiles = [
+    './data/القرعه.xlsx',
+    './data/القرعة.xlsx',
+    './data/قرعه.xlsx',
+    './data/قرعة.xlsx',
     './data/data.xlsx',
     './data/batches.xlsx',
     './data/lottery.xlsx',
-    './data/القرعة.xlsx',
-    './data/قرعة.xlsx',
+    './data/New Microsoft Excel Worksheet.xlsx',
     './data/الدفعات.xlsx',
     './data/دفعات.xlsx',
+    './data/الدفعه.xlsx',
+    './data/دفعه.xlsx',
+    './data/القرعه.csv',
+    './data/القرعة.csv',
+    './data/قرعه.csv',
+    './data/قرعة.csv',
     './data/data.csv',
     './data/batches.csv',
-    './data/lottery.csv',
-    './data/القرعة.csv',
-    './data/قرعة.csv'
+    './data/lottery.csv'
   ];
 
   for (const filePath of targetFiles) {
@@ -274,14 +281,15 @@ async function loadData() {
           const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
           const isLottery = headers.some(h =>
             h.includes('قطاع') || h.includes('مجاوره') || h.includes('مجاورة') ||
-            h.includes('بلوك') || h.includes('قطعه') || h.includes('قطعة') || h.includes('مساحه') || h.includes('مساحة')
+            h.includes('بلوك') || h.includes('قطعه') || h.includes('قطعة') || h.includes('مساحه') || h.includes('مساحة') ||
+            h.includes('قرعه') || h.includes('قرعة')
           );
           if (isLottery) {
             const items = extractLotteryItemsFromRows(jsonData);
-            accumulatedLottery.push(...items);
+            addUniqueLotteryItems(accumulatedLottery, items);
           } else {
             const items = extractBatchItemsFromRows(jsonData);
-            accumulatedBatches.push(...items);
+            addUniqueBatchItems(accumulatedBatches, items);
           }
           loadedFromDataFolder = true;
         }
@@ -304,13 +312,34 @@ async function loadData() {
       loadFallbackLotteryData();
     }
 
-    // Toast notification after data loading removed per user request
     return;
   }
 
   // Fallbacks if data/ folder has no loaded files
   loadFallbackBatchData();
   loadFallbackLotteryData();
+}
+
+function addUniqueLotteryItems(accumulated, newItems) {
+  const seenKeys = new Set(accumulated.map(item => `${normalizeString(item.name)}|${normalizeString(item.orderNum)}|${normalizeString(item.plotNum)}`));
+  for (const item of newItems) {
+    const key = `${normalizeString(item.name)}|${normalizeString(item.orderNum)}|${normalizeString(item.plotNum)}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      accumulated.push(item);
+    }
+  }
+}
+
+function addUniqueBatchItems(accumulated, newItems) {
+  const seenKeys = new Set(accumulated.map(item => `${normalizeString(item.name)}|${normalizeString(item.orderNum)}`));
+  for (const item of newItems) {
+    const key = `${normalizeString(item.name)}|${normalizeString(item.orderNum)}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      accumulated.push(item);
+    }
+  }
 }
 
 async function tryFetchAndParseExcel(filePath) {
@@ -732,14 +761,20 @@ function executeLotterySearch(query) {
   const normalized = normalizeString(trimmed);
   const queryDigits = normalized.replace(/\D/g, '');
 
-  // 1. Check for EXACT order number matches first in lottery (no partial suggestions)
+  // 1. Check for EXACT order number or lottery number matches first
   const exactOrderMatches = lotteryAppData.participants.filter(item => {
     const normOrder = normalizeString(item.orderNum || '');
-    if (!normOrder) return false;
+    const normLotteryNum = normalizeString(item.lotteryNum || '');
     const orderDigits = normOrder.replace(/\D/g, '');
+    const lotteryDigits = normLotteryNum.replace(/\D/g, '');
 
-    if (normOrder === normalized) return true;
-    if (queryDigits.length > 0 && orderDigits.length > 0 && orderDigits === queryDigits) return true;
+    if (normOrder && normOrder === normalized) return true;
+    if (normLotteryNum && normLotteryNum === normalized) return true;
+
+    if (queryDigits.length > 0) {
+      if (orderDigits.length > 0 && orderDigits === queryDigits) return true;
+      if (lotteryDigits.length > 0 && lotteryDigits === queryDigits) return true;
+    }
     return false;
   });
 
@@ -748,23 +783,31 @@ function executeLotterySearch(query) {
   if (exactOrderMatches.length > 0) {
     matches = exactOrderMatches;
   } else {
-    // If no exact order match, search by name, plot, block, sector, neighborhood
+    // If no exact order match, search by name, plot, block, sector, neighborhood, orderNum, lotteryNum
     matches = lotteryAppData.participants.filter(item => {
       const normName = normalizeString(item.name || '');
       const normPlot = normalizeString(item.plotNum || '');
       const normBlock = normalizeString(item.blockNum || '');
       const normSector = normalizeString(item.sector || '');
       const normNeighborhood = normalizeString(item.neighborhood || '');
+      const normOrder = normalizeString(item.orderNum || '');
+      const normLotteryNum = normalizeString(item.lotteryNum || '');
 
       if (queryDigits.length > 0) {
         const plotDigits = normPlot.replace(/\D/g, '');
         const blockDigits = normBlock.replace(/\D/g, '');
         const nameDigits = normName.replace(/\D/g, '');
+        const orderDigits = normOrder.replace(/\D/g, '');
+        const lotteryDigits = normLotteryNum.replace(/\D/g, '');
 
         return normPlot === normalized ||
                normBlock === normalized ||
+               normOrder === normalized ||
+               normLotteryNum === normalized ||
                (plotDigits.length > 0 && plotDigits === queryDigits) ||
                (blockDigits.length > 0 && blockDigits === queryDigits) ||
+               (orderDigits.length > 0 && orderDigits.includes(queryDigits)) ||
+               (lotteryDigits.length > 0 && lotteryDigits.includes(queryDigits)) ||
                normName.includes(normalized) ||
                (nameDigits.length > 0 && nameDigits.includes(queryDigits));
       } else {
@@ -772,7 +815,9 @@ function executeLotterySearch(query) {
                normSector.includes(normalized) || 
                normNeighborhood.includes(normalized) ||
                normPlot.includes(normalized) || 
-               normBlock.includes(normalized);
+               normBlock.includes(normalized) ||
+               normOrder.includes(normalized) ||
+               normLotteryNum.includes(normalized);
       }
     });
   }
@@ -1218,20 +1263,29 @@ function extractLotteryItemsFromRows(rows) {
   const headers = rows[0].map(h => String(h || '').trim().toLowerCase());
 
   let nameCol = headers.findIndex(h => h.includes('اسم') || h.includes('name') || h.includes('مواطن') || h.includes('عميل'));
-  let orderCol = headers.findIndex(h => h.includes('طلب') || h.includes('كود') || h.includes('code') || h.includes('order') || h.includes('رقم'));
+  
+  let orderCol = headers.findIndex(h => h.includes('رقم الطلب') || h.includes('كود') || h.includes('code') || h.includes('order num') || h.includes('order_num') || h.includes('order#'));
+  if (orderCol === -1) {
+    orderCol = headers.findIndex(h => (h.includes('طلب') || h.includes('order')) && !h.includes('تاريخ') && !h.includes('date'));
+  }
+  if (orderCol === -1) {
+    orderCol = headers.findIndex(h => h.includes('رقم القرع') || h.includes('رقم القرعة') || h.includes('رقم القرعه'));
+  }
+  if (orderCol === -1) {
+    orderCol = headers.findIndex(h => (h.includes('رقم') || h.includes('num')) && !h.includes('بلوك') && !h.includes('قطعة') && !h.includes('قطعه') && !h.includes('مساحة') && !h.includes('مساحه') && !h.includes('تاريخ'));
+  }
+
   let sectorCol = headers.findIndex(h => h.includes('قطاع') || h.includes('sector'));
   let neighborhoodCol = headers.findIndex(h => h.includes('مجاوره') || h.includes('مجاورة') || h.includes('مجاور'));
   let blockCol = headers.findIndex(h => h.includes('بلوك') || h.includes('block'));
   let plotCol = headers.findIndex(h => h.includes('قطعه') || h.includes('قطعة') || h.includes('plot'));
   let areaCol = headers.findIndex(h => h.includes('مساحه') || h.includes('مساحة') || h.includes('area'));
 
+  let lotteryNumCol = headers.findIndex(h => h.includes('رقم القرع') || h.includes('رقم القرعة') || h.includes('رقم القرعه'));
+  let orderDateCol = headers.findIndex(h => h.includes('تاريخ الطلب'));
+  let lotteryDateCol = headers.findIndex(h => h.includes('تاريخ القرع') || h.includes('تاريخ القرعة') || h.includes('تاريخ القرعه'));
+
   if (nameCol === -1) nameCol = 0;
-  if (orderCol === -1) orderCol = 1;
-  if (sectorCol === -1) sectorCol = 2;
-  if (neighborhoodCol === -1) neighborhoodCol = 3;
-  if (blockCol === -1) blockCol = 4;
-  if (plotCol === -1) plotCol = 5;
-  if (areaCol === -1) areaCol = 6;
 
   const importedLottery = [];
 
@@ -1240,19 +1294,38 @@ function extractLotteryItemsFromRows(rows) {
     if (!row || row.length === 0) continue;
 
     const name = String(row[nameCol] || '').trim();
-    const orderNum = String(row[orderCol] || '').trim();
-    if (!name && !orderNum) continue;
+    const orderNumVal = orderCol !== -1 ? String(row[orderCol] || '').trim() : '';
+    const lotteryNumVal = lotteryNumCol !== -1 ? String(row[lotteryNumCol] || '').trim() : '';
 
-    const sector = String(row[sectorCol] || 'القطاع الرئيسي').trim();
-    const neighborhood = String(row[neighborhoodCol] || 'المجاورة الأولى').trim();
-    const blockNum = String(row[blockCol] || `B-${i}`).trim();
-    const plotNum = String(row[plotCol] || `${i + 100}`).trim();
-    const rawArea = String(row[areaCol] || '209').trim();
-    const area = rawArea.includes('م') ? rawArea : `${rawArea} م²`;
+    if (!name && !orderNumVal && !lotteryNumVal) continue;
+
+    let finalOrderNum = orderNumVal;
+    if (!finalOrderNum || finalOrderNum === 'لا يوجد') {
+      if (lotteryNumVal && lotteryNumVal !== 'لا يوجد') {
+        finalOrderNum = lotteryNumVal;
+      }
+    }
+
+    const sector = String(sectorCol !== -1 ? row[sectorCol] : 'غير مخصص بعد').trim() || 'غير مخصص بعد';
+    const neighborhood = String(neighborhoodCol !== -1 ? row[neighborhoodCol] : 'غير مخصص بعد').trim() || 'غير مخصص بعد';
+    const blockNum = String(blockCol !== -1 ? row[blockCol] : 'غير مخصص بعد').trim() || 'غير مخصص بعد';
+    const plotNum = String(plotCol !== -1 ? row[plotCol] : 'غير مخصص بعد').trim() || 'غير مخصص بعد';
+    const rawArea = String(areaCol !== -1 ? row[areaCol] : 'غير مخصص بعد').trim() || 'غير مخصص بعد';
+
+    let area = rawArea;
+    if (rawArea !== 'غير مخصص بعد' && rawArea !== 'لا يوجد' && !rawArea.includes('م')) {
+      area = `${rawArea} م²`;
+    }
+
+    const orderDate = orderDateCol !== -1 ? formatDateValue(row[orderDateCol]) : 'غير محدد';
+    const lotteryDate = lotteryDateCol !== -1 ? formatDateValue(row[lotteryDateCol]) : 'غير محدد';
 
     importedLottery.push({
       name: name || `مواطن ${i}`,
-      orderNum: orderNum || `LOT-${i + 5000}`,
+      orderNum: finalOrderNum || `LOT-${i + 5000}`,
+      lotteryNum: lotteryNumVal,
+      orderDate: orderDate,
+      lotteryDate: lotteryDate,
       sector: sector,
       neighborhood: neighborhood,
       blockNum: blockNum,
