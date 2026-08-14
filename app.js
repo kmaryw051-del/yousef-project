@@ -860,7 +860,7 @@ function renderLotteryResults(matches, query) {
       <div class="glass-card lottery-result-card card-animate-pop">
         <div class="card-status-bar">
           <span class="status-tag gold-tag">
-            <i class="fa-solid fa-circle-check"></i> ${matches.length > 1 ? `نتيجة رقم #${index + 1} بالقرعة` : 'فائز بالقرعة العلنية'}
+            <i class="fa-solid fa-circle-check"></i> ${matches.length > 1 ? `نتيجة رقم #${index + 1} بالقرعة` : 'نتيجة القرعة العلنية'}
           </span>
           <button class="btn btn-secondary btn-sm copy-single-lottery-btn" data-index="${index}">
             <i class="fa-solid fa-copy"></i> <span>نسخ بيانات القرعة</span>
@@ -883,8 +883,38 @@ function renderLotteryResults(matches, query) {
               <i class="fa-solid fa-receipt"></i>
             </div>
             <div class="detail-content">
-              <span class="detail-label">رقم الطلب بالقرعة</span>
+              <span class="detail-label">رقم الطلب</span>
               <span class="detail-value highlight-code">${escapeHtml(item.orderNum || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon lottery-num-icon">
+              <i class="fa-solid fa-ticket"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">رقم القرعة</span>
+              <span class="detail-value highlight-code">${escapeHtml(item.lotteryNum || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon order-date-icon">
+              <i class="fa-solid fa-calendar-days"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">تاريخ الطلب</span>
+              <span class="detail-value">${escapeHtml(item.orderDate || 'غير محدد')}</span>
+            </div>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-icon date-icon">
+              <i class="fa-solid fa-calendar-check"></i>
+            </div>
+            <div class="detail-content">
+              <span class="detail-label">تاريخ القرعة</span>
+              <span class="detail-value">${escapeHtml(item.lotteryDate || 'غير محدد')}</span>
             </div>
           </div>
 
@@ -950,7 +980,7 @@ function renderLotteryResults(matches, query) {
   if (copyAllBtn) {
     copyAllBtn.addEventListener('click', () => {
       const summaryText = matches.map((item, i) =>
-        `نتيجة القرعة #${i + 1}:\n- الاسم: ${item.name || 'غير محدد'}\n- رقم الطلب: ${item.orderNum || 'غير محدد'}\n- القطاع: ${item.sector || 'غير محدد'}\n- المجاورة: ${item.neighborhood || 'غير محدد'}\n- رقم البلوك: ${item.blockNum || 'غير محدد'}\n- رقم القطعة: ${item.plotNum || 'غير محدد'}\n- المساحة: ${item.area || 'غير محدد'}`
+        `نتيجة القرعة #${i + 1}:\n- الاسم: ${item.name || 'غير محدد'}\n- رقم الطلب: ${item.orderNum || 'غير محدد'}\n- رقم القرعة: ${item.lotteryNum || 'غير محدد'}\n- تاريخ الطلب: ${item.orderDate || 'غير محدد'}\n- تاريخ القرعة: ${item.lotteryDate || 'غير محدد'}\n- القطاع: ${item.sector || 'غير محدد'}\n- المجاورة: ${item.neighborhood || 'غير محدد'}\n- رقم البلوك: ${item.blockNum || 'غير محدد'}\n- رقم القطعة: ${item.plotNum || 'غير محدد'}\n- المساحة: ${item.area || 'غير محدد'}`
       ).join('\n-------------------------\n');
 
       navigator.clipboard.writeText(summaryText).then(() => {
@@ -965,7 +995,7 @@ function renderLotteryResults(matches, query) {
       const item = matches[idx];
       if (!item) return;
 
-      const summaryText = `تفاصيل نتيجة القرعة العلنية:\n- الاسم: ${item.name || 'غير محدد'}\n- رقم الطلب: ${item.orderNum || 'غير محدد'}\n- القطاع: ${item.sector || 'غير محدد'}\n- المجاورة: ${item.neighborhood || 'غير محدد'}\n- رقم البلوك: ${item.blockNum || 'غير محدد'}\n- رقم القطعة: ${item.plotNum || 'غير محدد'}\n- المساحة: ${item.area || 'غير محدد'}`;
+      const summaryText = `تفاصيل نتيجة القرعة العلنية:\n- الاسم: ${item.name || 'غير محدد'}\n- رقم الطلب: ${item.orderNum || 'غير محدد'}\n- رقم القرعة: ${item.lotteryNum || 'غير محدد'}\n- تاريخ الطلب: ${item.orderDate || 'غير محدد'}\n- تاريخ القرعة: ${item.lotteryDate || 'غير محدد'}\n- القطاع: ${item.sector || 'غير محدد'}\n- المجاورة: ${item.neighborhood || 'غير محدد'}\n- رقم البلوك: ${item.blockNum || 'غير محدد'}\n- رقم القطعة: ${item.plotNum || 'غير محدد'}\n- المساحة: ${item.area || 'غير محدد'}`;
 
       navigator.clipboard.writeText(summaryText).then(() => {
         const span = btn.querySelector('span');
@@ -1108,15 +1138,18 @@ function bindEvents() {
 
   if (copyLotteryDetailsBtn) {
     copyLotteryDetailsBtn.addEventListener('click', () => {
-      const name = document.getElementById('cardLotteryName').textContent;
-      const order = document.getElementById('cardLotteryOrderNum').textContent;
-      const sector = document.getElementById('cardLotterySector').textContent;
-      const neighborhood = document.getElementById('cardLotteryNeighborhood').textContent;
-      const block = document.getElementById('cardLotteryBlock').textContent;
-      const plot = document.getElementById('cardLotteryPlot').textContent;
-      const area = document.getElementById('cardLotteryArea').textContent;
+      const name = document.getElementById('cardLotteryName')?.textContent || '';
+      const order = document.getElementById('cardLotteryOrderNum')?.textContent || '';
+      const lotteryNum = document.getElementById('cardLotteryNum')?.textContent || '';
+      const orderDate = document.getElementById('cardLotteryOrderDate')?.textContent || '';
+      const lotteryDate = document.getElementById('cardLotteryDate')?.textContent || '';
+      const sector = document.getElementById('cardLotterySector')?.textContent || '';
+      const neighborhood = document.getElementById('cardLotteryNeighborhood')?.textContent || '';
+      const block = document.getElementById('cardLotteryBlock')?.textContent || '';
+      const plot = document.getElementById('cardLotteryPlot')?.textContent || '';
+      const area = document.getElementById('cardLotteryArea')?.textContent || '';
 
-      const summaryText = `تفاصيل نتيجة القرعة العلنية:\n- الاسم: ${name}\n- رقم الطلب: ${order}\n- القطاع: ${sector}\n- المجاورة: ${neighborhood}\n- رقم البلوك: ${block}\n- رقم القطعة: ${plot}\n- المساحة: ${area}`;
+      const summaryText = `تفاصيل نتيجة القرعة العلنية:\n- الاسم: ${name}\n- رقم الطلب: ${order}\n- رقم القرعة: ${lotteryNum}\n- تاريخ الطلب: ${orderDate}\n- تاريخ القرعة: ${lotteryDate}\n- القطاع: ${sector}\n- المجاورة: ${neighborhood}\n- رقم البلوك: ${block}\n- رقم القطعة: ${plot}\n- المساحة: ${area}`;
 
       navigator.clipboard.writeText(summaryText).then(() => {
         const copyLotteryBtnText = document.getElementById('copyLotteryBtnText');

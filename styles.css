@@ -1337,3 +1337,8 @@ body {
 }
 
 
+
+.lottery-num-icon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
