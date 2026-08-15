@@ -245,10 +245,33 @@ function logoutAdmin() {
    Data Loading & Default Mock Data Logic
    ========================================================================== */
 async function loadData() {
-  let loadedFromDataFolder = false;
-  let accumulatedBatches = [];
-  let accumulatedLottery = [];
+  showLoadingIndicator(true);
 
+  // Step 1: Load instantly from localStorage cache for immediate UI
+  let hasCachedBatch = false;
+  let hasCachedLottery = false;
+  const savedBatch = localStorage.getItem(STORAGE_KEY_BATCH);
+  const savedLottery = localStorage.getItem(STORAGE_KEY_LOTTERY);
+  if (savedBatch) {
+    try {
+      const parsed = JSON.parse(savedBatch);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        processBatchData(parsed, 'بيانات الدفعات (كاش)');
+        hasCachedBatch = true;
+      }
+    } catch (e) {}
+  }
+  if (savedLottery) {
+    try {
+      const parsed = JSON.parse(savedLottery);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        processLotteryData(parsed, 'بيانات القرعة (كاش)');
+        hasCachedLottery = true;
+      }
+    } catch (e) {}
+  }
+
+  // Step 2: Fetch all Excel files in PARALLEL (not sequential)
   const targetFiles = [
     './data/القرعه.xlsx',
     './data/القرعة.xlsx',
@@ -271,53 +294,73 @@ async function loadData() {
     './data/lottery.csv'
   ];
 
-  for (const filePath of targetFiles) {
-    const workbook = await tryFetchAndParseExcel(filePath);
-    if (workbook && workbook.SheetNames && workbook.SheetNames.length > 0) {
-      for (const sheetName of workbook.SheetNames) {
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-        if (jsonData && jsonData.length >= 2) {
-          const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
-          const isLottery = headers.some(h =>
-            h.includes('قطاع') || h.includes('مجاوره') || h.includes('مجاورة') ||
-            h.includes('بلوك') || h.includes('قطعه') || h.includes('قطعة') || h.includes('مساحه') || h.includes('مساحة') ||
-            h.includes('قرعه') || h.includes('قرعة')
-          );
-          if (isLottery) {
-            const items = extractLotteryItemsFromRows(jsonData);
-            addUniqueLotteryItems(accumulatedLottery, items);
-          } else {
-            const items = extractBatchItemsFromRows(jsonData);
-            addUniqueBatchItems(accumulatedBatches, items);
-          }
-          loadedFromDataFolder = true;
-        }
+  // Fetch all files simultaneously, ignore failed ones
+  const results = await Promise.allSettled(targetFiles.map(fp => tryFetchAndParseExcel(fp)));
+
+  let accumulatedBatches = [];
+  let accumulatedLottery = [];
+  let loadedFromDataFolder = false;
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled' || !result.value) continue;
+    const workbook = result.value;
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) continue;
+
+    for (const sheetName of workbook.SheetNames) {
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', dense: false });
+      if (!jsonData || jsonData.length < 2) continue;
+
+      const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
+      const isLottery = headers.some(h =>
+        h.includes('قطاع') || h.includes('مجاوره') || h.includes('مجاورة') ||
+        h.includes('بلوك') || h.includes('قطعه') || h.includes('قطعة') ||
+        h.includes('مساحه') || h.includes('مساحة') ||
+        h.includes('قرعه') || h.includes('قرعة')
+      );
+      if (isLottery) {
+        const items = extractLotteryItemsFromRows(jsonData);
+        addUniqueLotteryItems(accumulatedLottery, items);
+      } else {
+        const items = extractBatchItemsFromRows(jsonData);
+        addUniqueBatchItems(accumulatedBatches, items);
       }
+      loadedFromDataFolder = true;
     }
   }
+
+  showLoadingIndicator(false);
 
   if (loadedFromDataFolder) {
     if (accumulatedBatches.length > 0) {
       processBatchData(accumulatedBatches, 'بيانات المجلد data/');
       try { localStorage.setItem(STORAGE_KEY_BATCH, JSON.stringify(accumulatedBatches)); } catch (e) {}
-    } else {
-      loadFallbackBatchData();
+    } else if (!hasCachedBatch) {
+      loadDefaultBatchData();
     }
 
     if (accumulatedLottery.length > 0) {
       processLotteryData(accumulatedLottery, 'بيانات المجلد data/');
       try { localStorage.setItem(STORAGE_KEY_LOTTERY, JSON.stringify(accumulatedLottery)); } catch (e) {}
-    } else {
-      loadFallbackLotteryData();
+    } else if (!hasCachedLottery) {
+      loadDefaultLotteryData();
     }
-
     return;
   }
 
-  // Fallbacks if data/ folder has no loaded files
-  loadFallbackBatchData();
-  loadFallbackLotteryData();
+  // No files found – use cache or fallback mock data
+  if (!hasCachedBatch) loadDefaultBatchData();
+  if (!hasCachedLottery) loadDefaultLotteryData();
+}
+
+function showLoadingIndicator(show) {
+  const el = document.getElementById('globalLoadingBar');
+  if (!el) return;
+  if (show) {
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+  }
 }
 
 function addUniqueLotteryItems(accumulated, newItems) {
@@ -344,12 +387,12 @@ function addUniqueBatchItems(accumulated, newItems) {
 
 async function tryFetchAndParseExcel(filePath) {
   try {
-    const res = await fetch(filePath, { cache: 'no-cache' });
+    const res = await fetch(filePath);
     if (!res.ok) return null;
     const arrayBuffer = await res.arrayBuffer();
     if (!arrayBuffer || arrayBuffer.byteLength === 0) return null;
     if (typeof XLSX === 'undefined') return null;
-    return XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false });
+    return XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false, sheetStubs: false });
   } catch (err) {
     return null;
   }
