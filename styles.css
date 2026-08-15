@@ -200,10 +200,13 @@ body {
    Main Grid Layout
    ========================================================================== */
 .main-content {
-  display: grid;
-  grid-template-columns: 1fr 360px;
+  display: flex;
+  flex-direction: column;
   gap: 28px;
   flex: 1;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 /* Glass Card Base Style */

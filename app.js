@@ -47,7 +47,6 @@ function setupTabs() {
   const tabLotteryBtn = document.getElementById('tabLotteryBtn');
   const sectionBatches = document.getElementById('sectionBatches');
   const sectionLottery = document.getElementById('sectionLottery');
-  const batchesSidebarBox = document.getElementById('batchesSidebarBox');
 
   if (tabBatchesBtn && tabLotteryBtn) {
     tabBatchesBtn.addEventListener('click', () => {
@@ -61,9 +60,6 @@ function setupTabs() {
       if (sectionLottery) {
         sectionLottery.classList.add('hidden-tab');
         sectionLottery.classList.remove('active-tab');
-      }
-      if (batchesSidebarBox) {
-        batchesSidebarBox.style.display = 'block';
       }
 
       const input = document.getElementById('searchBatchInput');
@@ -81,9 +77,6 @@ function setupTabs() {
       if (sectionBatches) {
         sectionBatches.classList.add('hidden-tab');
         sectionBatches.classList.remove('active-tab');
-      }
-      if (batchesSidebarBox) {
-        batchesSidebarBox.style.display = 'none';
       }
 
       const input = document.getElementById('searchLotteryInput');
@@ -590,35 +583,23 @@ function executeBatchSearch(query) {
   }
 
   const normalized = normalizeString(trimmed);
-  const queryDigits = normalized.replace(/\D/g, '');
 
-  // 1. Check for EXACT order number matches first (no partial digit suggestions)
+  // 1. Check for EXACT order number match only (no loose digit stripping or letter mixing)
   const exactOrderMatches = batchAppData.clients.filter(client => {
     const normOrder = normalizeString(client.orderNum || '');
-    if (!normOrder) return false;
-    const orderDigits = normOrder.replace(/\D/g, '');
-
-    if (normOrder === normalized) return true;
-    if (queryDigits.length > 0 && orderDigits.length > 0 && orderDigits === queryDigits) return true;
-    return false;
+    return normOrder === normalized;
   });
 
   let matches = [];
 
   if (exactOrderMatches.length > 0) {
+    // Return only the exact matched order number
     matches = exactOrderMatches;
   } else {
-    // If no exact order match, perform search by client name
+    // If no exact order match, perform search by client name only
     matches = batchAppData.clients.filter(client => {
       const normName = normalizeString(client.name || '');
-
-      if (queryDigits.length > 0) {
-        const nameDigits = normName.replace(/\D/g, '');
-        return normName.includes(normalized) ||
-               (nameDigits.length > 0 && nameDigits.includes(queryDigits));
-      } else {
-        return normName.includes(normalized);
-      }
+      return normName.includes(normalized);
     });
   }
 
@@ -802,66 +783,35 @@ function executeLotterySearch(query) {
   }
 
   const normalized = normalizeString(trimmed);
-  const queryDigits = normalized.replace(/\D/g, '');
 
-  // 1. Check for EXACT order number or lottery number matches first
+  // 1. Check for EXACT order number or EXACT lottery number match only (no loose digit stripping)
   const exactOrderMatches = lotteryAppData.participants.filter(item => {
     const normOrder = normalizeString(item.orderNum || '');
     const normLotteryNum = normalizeString(item.lotteryNum || '');
-    const orderDigits = normOrder.replace(/\D/g, '');
-    const lotteryDigits = normLotteryNum.replace(/\D/g, '');
 
-    if (normOrder && normOrder === normalized) return true;
-    if (normLotteryNum && normLotteryNum === normalized) return true;
-
-    if (queryDigits.length > 0) {
-      if (orderDigits.length > 0 && orderDigits === queryDigits) return true;
-      if (lotteryDigits.length > 0 && lotteryDigits === queryDigits) return true;
-    }
-    return false;
+    return (normOrder && normOrder === normalized) ||
+           (normLotteryNum && normLotteryNum === normalized);
   });
 
   let matches = [];
 
   if (exactOrderMatches.length > 0) {
+    // Return only the exact matched order / lottery number
     matches = exactOrderMatches;
   } else {
-    // If no exact order match, search by name, plot, block, sector, neighborhood, orderNum, lotteryNum
+    // If no exact order/lottery match, search by name, plot, block, sector, neighborhood
     matches = lotteryAppData.participants.filter(item => {
       const normName = normalizeString(item.name || '');
       const normPlot = normalizeString(item.plotNum || '');
       const normBlock = normalizeString(item.blockNum || '');
       const normSector = normalizeString(item.sector || '');
       const normNeighborhood = normalizeString(item.neighborhood || '');
-      const normOrder = normalizeString(item.orderNum || '');
-      const normLotteryNum = normalizeString(item.lotteryNum || '');
 
-      if (queryDigits.length > 0) {
-        const plotDigits = normPlot.replace(/\D/g, '');
-        const blockDigits = normBlock.replace(/\D/g, '');
-        const nameDigits = normName.replace(/\D/g, '');
-        const orderDigits = normOrder.replace(/\D/g, '');
-        const lotteryDigits = normLotteryNum.replace(/\D/g, '');
-
-        return normPlot === normalized ||
-               normBlock === normalized ||
-               normOrder === normalized ||
-               normLotteryNum === normalized ||
-               (plotDigits.length > 0 && plotDigits === queryDigits) ||
-               (blockDigits.length > 0 && blockDigits === queryDigits) ||
-               (orderDigits.length > 0 && orderDigits.includes(queryDigits)) ||
-               (lotteryDigits.length > 0 && lotteryDigits.includes(queryDigits)) ||
-               normName.includes(normalized) ||
-               (nameDigits.length > 0 && nameDigits.includes(queryDigits));
-      } else {
-        return normName.includes(normalized) || 
-               normSector.includes(normalized) || 
-               normNeighborhood.includes(normalized) ||
-               normPlot.includes(normalized) || 
-               normBlock.includes(normalized) ||
-               normOrder.includes(normalized) ||
-               normLotteryNum.includes(normalized);
-      }
+      return normName.includes(normalized) ||
+             normPlot === normalized ||
+             normBlock === normalized ||
+             normSector.includes(normalized) ||
+             normNeighborhood.includes(normalized);
     });
   }
 
